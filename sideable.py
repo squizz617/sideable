@@ -18,7 +18,7 @@ class BasicBlock():
     bid = None              # basic block's id
     start_ea = None         # starting address
     end_ea = None           # ending address
-    # pred_blocks = []        # list of predecessor blocks' id
+    pred_blocks = []        # list of predecessor blocks' id
     succ_blocks = []        # list of successor blocks' id
     addr_inst_map = {}      # map of address to instruction
     addr_inst_abs_map = {}  # map of address to abstract instruction
@@ -28,18 +28,25 @@ class BasicBlock():
     inst_abs_hash = ""      # md5 hash of the abstract string
 
     # def __init__(self, bb_id, startEA, endEA, pred_blocks, succ_blocks):
-    def __init__(self, bb_id, startEA, endEA, succ_blocks):
+    def __init__(self, bb_id, startEA, endEA, pred_blocks, succ_blocks):
         self.bid = bb_id
         self.start_ea = startEA
         self.end_ea = endEA
-        # self.pred_blocks = pred_blocks
+        self.pred_blocks = pred_blocks
         self.succ_blocks = succ_blocks
+        self.addr_inst_map = {}
+        self.addr_inst_abs_map = {}
+        self.inst_str = ""
+        self.inst_abs_str = ""
 
-        # bb_table[self.bid] = "%08X" % (self.start_ea)
         for head in idautils.Heads(self.start_ea, self.end_ea):
             idc.OpHex(head, -1) # print everything in Hex
             addr = "%08X" % head
             mnem = idc.GetMnem(head)
+
+            if mnem.startswith("j"):
+                continue # WARNING: experimental feature to filter jmp's at the end of blocks
+
             op1 = idc.GetOpnd(head, 0)
             op1_type = idc.GetOpType(head, 0)
             # op1_val = idc.GetOperandValue(head, 0)
@@ -129,34 +136,17 @@ if __name__ == "__main__":
 
             flowchart = idaapi.FlowChart(idaapi.get_func(f))
             for block in flowchart:
+                pred_block_list = []  # doesn't work.. always empty
+                for pred_block in block.preds():
+                    print pred_block.id
+                    pred_block_list.append(pred_block.id)
+
                 succ_block_list = []
                 for succ_block in block.succs():
                     succ_block_list.append(succ_block.id)
 
-                # pred_block_list = []  # doesn't work.. always empty
-                # for pred_block in block.preds():
-                #     pred_block_list.append(pred_block.id)
-
-                bb = BasicBlock(block.id, block.startEA, block.endEA, succ_block_list)
-                # bb_list.append(bb)
-                # split_block(block.startEA, block.endEA)
-                # print >> fp, "%x - %x [%d]:" % (block.startEA, block.endEA, block.id)
-                # for head in idautils.Heads(block.startEA, block.endEA):
-                #     print >> fp, "%08X\t" % head + idc.GetDisasm(head)
-                # block_instructions(block.startEA, block.endEA)
-                # bb.get_instructions()
-
+                bb = BasicBlock(block.id, block.startEA, block.endEA, pred_block_list, succ_block_list)
                 cPickle.dump(bb, fp)
-
-                # for succ_block in block.succs():
-                #     print >> fp, "S: %x - %x [%d]:" % (succ_block.startEA, succ_block.endEA, succ_block.id)
-                #     # block_instructions(succ_block.startEA, succ_block.endEA)
-
-                # for pred_block in block.preds():
-                #     print >> fp, "P: %x - %x [%d]:" % (pred_block.startEA, pred_block.endEA, pred_block.id)
-                #     # block_instructions(pred_block.startEA, pred_block.endEA)
-
-                # fp.write(GetDisasm(block) + "\n")
 
             # print >> fp, bb_list
 
