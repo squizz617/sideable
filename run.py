@@ -88,6 +88,9 @@ def main():
     entry = 0
     exit = len(bb_list1) - 1
 
+    for bb2 in bb_list2:
+        cfg2[bb2.bid] = bb2.succ_blocks
+
     match_cnt = 0
     match_list_bb1 = []
     match_list_bb2 = []
@@ -111,17 +114,15 @@ def main():
             for addr in sorted(bb1.addr_inst_map):
                 print addr, bb1.addr_inst_map[addr]
             target = bb1.bid
-            # print find_all_paths(cfg1, entry, target)
-            # print find_all_paths(cfg1, target, exit)
+
             bb1_preds = get_preds(cfg1, bb1.bid)
             bb1_succs = cfg1[bb1.bid]
-
             print "preds:", bb1_preds
             print "succs:", bb1_succs
 
-            for parent in bb1_preds:
-                for child in bb1_succs:
-                    print find_all_paths(cfg1, parent, child)
+            # for parent in bb1_preds:
+            #     for child in bb1_succs:
+            #         print find_all_paths(cfg1, parent, child)
 
     for bb2 in bb_list2:
         if bb2.bid not in match_list_bb2:
@@ -129,6 +130,12 @@ def main():
             for addr in sorted(bb2.addr_inst_map):
                 print addr, bb2.addr_inst_map[addr]
 
+            bb2_preds = get_preds(cfg2, bb2.bid)
+            bb2_succs = cfg2[bb2.bid]
+            print "preds:", bb2_preds
+            print "succs:", bb2_succs
+
+    # we need to look for an old-new pair
 
 if __name__ == "__main__":
     main()
