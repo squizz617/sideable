@@ -59,6 +59,14 @@ def find_all_paths(graph, start, end, path=[]):
                 paths.append(newpath)
     return paths
 
+def get_preds(cfg, bid):
+    preds_list = []
+    for node in cfg:
+        for succ in cfg[node]:
+            if succ == bid:
+                preds_list.append(node)
+    return list(set(preds_list))
+
 
 def main():
     bb_list1 = analyze("date-822")
@@ -80,14 +88,6 @@ def main():
     entry = 0
     exit = len(bb_list1) - 1
 
-    # target = 50
-    # print find_all_paths(cfg1, entry, target)
-    # print find_all_paths(cfg1, target, exit)
-
-
-    # print len(bb_list1), "elements in list1"
-    # print len(bb_list2), "elements in list2"
-
     match_cnt = 0
     match_list_bb1 = []
     match_list_bb2 = []
@@ -107,19 +107,27 @@ def main():
     print match_cnt, "matches"
     for bb1 in bb_list1:
         if bb1.bid not in match_list_bb1:
-            print bb1.bid
+            print "candidate bb in B0:", bb1.bid
             for addr in sorted(bb1.addr_inst_map):
                 print addr, bb1.addr_inst_map[addr]
             target = bb1.bid
             # print find_all_paths(cfg1, entry, target)
             # print find_all_paths(cfg1, target, exit)
+            bb1_preds = get_preds(cfg1, bb1.bid)
+            bb1_succs = cfg1[bb1.bid]
+
+            print "preds:", bb1_preds
+            print "succs:", bb1_succs
+
+            for parent in bb1_preds:
+                for child in bb1_succs:
+                    print find_all_paths(cfg1, parent, child)
 
     for bb2 in bb_list2:
         if bb2.bid not in match_list_bb2:
             print bb2.bid
             for addr in sorted(bb2.addr_inst_map):
                 print addr, bb2.addr_inst_map[addr]
-
 
 
 if __name__ == "__main__":
