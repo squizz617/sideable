@@ -4,3 +4,9 @@
 *.tar*
 *.zip
 log*
+trash/
+*.dcm
+.vscode
+downloader.py
+notes/
+binaries/
