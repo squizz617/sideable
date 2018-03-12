@@ -7,9 +7,15 @@ https://www.hex-rays.com/products/ida/support/idapython_docs/
 import hashlib
 import cPickle
 import inspect
+import os
+import sys
+import logger
 import idautils
 import idaapi
 import idc
+
+bin_dir = "binaries"
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), bin_dir))
 
 # bb_table = {}
 
@@ -107,31 +113,61 @@ class BasicBlock():
 if __name__ == "__main__":
     idaapi.autoWait()
 
-    fp_log = open("logger", "w")
-    func_target = "parse_datetime"
+    fp_log = open("logger", "a")
 
+    flag_allfunc = 0
+    target_binary_name = idaapi.get_root_filename()
+    
+    if len(idc.ARGV) == 2:
+        func_target = idc.ARGV[1]
+        if func_target == "FORALLFUNC":
+            flag_allfunc = 1
+            dir_name = os.path.join(bin_dir, "allfunc-"+target_binary_name)
+            try:
+                os.mkdir(dir_name)
+            except:
+                pass
+        else:
+            fp_onefunc = open(os.path.join(bin_dir, "func-"+target_binary_name + ".dcm"), "wb")
 
-    fp = open("log-"+idaapi.get_root_filename(), "wb")
-    # if len(idc.ARGV) == 0: # in case we run this script in IDA Pro
-    #     fp = open("log-"+idaapi.get_root_filename(), "wb")
-    # else: # in case this script is called from run.py with arguments
-    #     fp = open("log-"+idc.ARGV[1], "wb")
+    else:
+        func_target = "FORALLFUNC"
+        flag_allfunc = 1
+        dir_name = os.path.join(bin_dir, "allfunc-"+target_binary_name)
+        try:
+            os.mkdir(dir_name)
+        except:
+            pass
+        # fp_log.write(target_binary_name + "\n" + str(flag_allfunc) + "\n" + func_target)
 
     funcs = idautils.Functions()
     for f in funcs:
         func_name = idc.GetFunctionName(f)
-        if func_name == func_target:
-            # print hex(f), GetFunctionName(f)
-            # fp.write(func_name + "\n")
-            # print >> fp, func_name
+        # print >> fp_log, func_name
+        if flag_allfunc:
+            try:
+                fp_allfunc = open(os.path.join(dir_name, "func-"+func_name+".dcm"), "wb")
+            except IOError:
+                continue
+            bb_list = []
+            
+            flowchart = idaapi.FlowChart(idaapi.get_func(f))
+            for block in flowchart:
+                pred_block_list = []  # doesn't work.. always empty
+                for pred_block in block.preds():
+                    print pred_block.id
+                    pred_block_list.append(pred_block.id)
 
-            # for (startea, endea) in idautils.Chunks(f):
-            #     E = list(idautils.FuncItems(f))
-            #     for e in E:
-            #         fp.write("%X" % e)
-            #         fp.write(" ")
-            #         fp.write(GetDisasm(e))
-            #         fp.write("\n")
+                succ_block_list = []
+                for succ_block in block.succs():
+                    succ_block_list.append(succ_block.id)
+
+                bb = BasicBlock(block.id, block.startEA, block.endEA, pred_block_list, succ_block_list)
+                cPickle.dump(bb, fp_allfunc)
+            
+            fp_allfunc.close()
+        
+        elif func_target in func_name:
             bb_list = []
 
             flowchart = idaapi.FlowChart(idaapi.get_func(f))
@@ -146,21 +182,11 @@ if __name__ == "__main__":
                     succ_block_list.append(succ_block.id)
 
                 bb = BasicBlock(block.id, block.startEA, block.endEA, pred_block_list, succ_block_list)
-                cPickle.dump(bb, fp)
+                cPickle.dump(bb, fp_onefunc)
 
-            # print >> fp, bb_list
-
-    # # print >> fp, bb_table
-    # bb_hash_list = []
-    # bb_hash_list_str = ""
-    # for bb in bb_list:
-    #     # bb_hash_list.append(bb.inst_hash)
-    #     bb_hash_list_str += bb.inst_hash + " "
-
-    # print >> fp, bb_hash_list_str
-
-
-    fp.close()
+    if flag_allfunc == 0:
+        fp_onefunc.close()
+    print >> fp_log, "closing logger"
     fp_log.close()
 
     idc.Exit(0)

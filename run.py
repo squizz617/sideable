@@ -5,8 +5,14 @@ from the given ELF binary file.
 """
 
 import os
+import sys
 import subprocess
 import cPickle
+import Levenshtein
+
+bin_dir = "binaries"
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), bin_dir))
+
 # from anytree import Node, RenderTree
 
 class BasicBlock():
@@ -23,27 +29,39 @@ class BasicBlock():
     inst_abs_hash = ""      # md5 hash of the abstract string
 
 
-def analyze(target):
+def analyze(target, function):
     # cmd = 'idat.exe -c -A -P- -S"sideable.py ' + target + '" ' + target
-    cmd = 'idat.exe -c -A -P- -S"sideable.py" ' + target
+    cmd = 'idat.exe -c -A -P -S"sideable.py ' + function + '" ' + os.path.join(bin_dir, target)
+    print cmd
     os.system(cmd)
 
-    bb_list = []
+    bb_dict = {} # {"func_name": bb_list}
 
-    with open("log-" + target, "rb") as fp:
-        # lst = fp.read().rstrip().split(" ")
-        # lst = list(set(lst))
-        while True:
-            try:
-                bb = cPickle.load(fp)
-                bb_list.append(bb)
-            except EOFError:
-                break
+    if function == "FORALLFUNC":
+        for func_name in os.listdir(os.path.join(bin_dir, "allfunc-"+target)):
+            bb_list = []
+            with open(os.path.join(bin_dir, "allfunc-"+target, func_name), "rb") as fp:
+                while True:
+                    try:
+                        bb = cPickle.load(fp)
+                        bb_list.append(bb)
+                    except EOFError:
+                        break
+            bb_dict[func_name] = bb_list
 
-    return bb_list
+    else:
+        bb_list = []
+        with open(target + ".dcm", "rb") as fp:
+            while True:
+                try:
+                    bb = cPickle.load(fp)
+                    bb_list.append(bb)
+                except EOFError:
+                    break
+        bb_dict[function] = bb_list
+    
+    return bb_dict
 
-cfg1 = {}
-cfg2 = {}
 
 def find_all_paths(graph, start, end, path=[]):
     path = path + [start]
@@ -59,6 +77,7 @@ def find_all_paths(graph, start, end, path=[]):
                 paths.append(newpath)
     return paths
 
+
 def get_preds(cfg, bid):
     preds_list = []
     for node in cfg:
@@ -68,9 +87,27 @@ def get_preds(cfg, bid):
     return list(set(preds_list))
 
 
+def print_inst(bb):
+    for addr in sorted(bb.addr_inst_map):
+        print addr, bb.addr_inst_map[addr]
+
+
+def print_abs_inst(bb):
+    for addr in sorted(bb.addr_inst_abs_map):
+        print addr, bb.addr_inst_abs_map[addr]
+
+
 def main():
-    bb_list1 = analyze("date-822")
-    bb_list2 = analyze("date-823")
+    vuln_func = "make_device"
+    bb_list1 = analyze("busybox_mdev_old", vuln_func)[vuln_func]
+    bb_list2 = analyze("busybox_mdev_new", vuln_func)[vuln_func]
+
+    # vuln_func = "xmalloc_optname_optval"
+    # bb_list1 = analyze("busybox_1.24.2_armeabi5", vuln_func)[vuln_func]
+    # bb_list2 = analyze("busybox_1.25.0_armeabi5", vuln_func)[vuln_func]
+
+    cfg1 = {}
+    cfg2 = {}
 
     for bb1 in bb_list1:
         # print bb1.bid, bb1.succ_blocks
@@ -100,42 +137,127 @@ def main():
         for bb2 in bb_list2:
             # if bb1.inst_hash == bb2.inst_hash:
             if bb1.inst_abs_hash == bb2.inst_abs_hash:
-                print "match @", bb1.bid, bb2.bid
+                # print "match @", bb1.bid, bb2.bid
                 match_list_bb2.append(bb2.bid)
                 match = 1
         if match:
             match_list_bb1.append(bb1.bid)
             match_cnt += 1
 
-    print match_cnt, "matches"
+    vuln_ptrace_list = []
+
+    missing_bb_list1 = []
+    print match_cnt, "/", len(bb_list1), "matches"
     for bb1 in bb_list1:
         if bb1.bid not in match_list_bb1:
-            print "candidate bb in B0:", bb1.bid
-            for addr in sorted(bb1.addr_inst_map):
-                print addr, bb1.addr_inst_map[addr]
-            target = bb1.bid
+            missing_bb_list1.append(bb1)
+            print "candidate bb in 1st binary:", bb1.bid
+            # for addr in sorted(bb1.addr_inst_map):
+                # print addr, bb1.addr_inst_map[addr]
+            # print_inst(bb1)
 
-            bb1_preds = get_preds(cfg1, bb1.bid)
-            bb1_succs = cfg1[bb1.bid]
-            print "preds:", bb1_preds
-            print "succs:", bb1_succs
+            bb1.pred_blocks = get_preds(cfg1, bb1.bid)
+            # print "preds:", bb1.pred_blocks
+            # print "succs:", bb1.succ_blocks
+
+            print "POSSIBLE VULN TRACES:"
+            for pred in bb1.pred_blocks:
+                for succ in bb1.succ_blocks:
+                    vuln_ptrace_list.append([pred, bb1.bid, succ])
+
+                    print "{}-{}-{}".format(pred, bb1.bid, succ)
+                    print "({})".format(pred)
+                    print_inst(bb_list1[pred])
+                    print "({})".format(bb1.bid)
+                    print_inst(bb1)
+                    print "({})".format(succ)
+                    print_inst(bb_list1[succ])
+                    print ""
+
+            print "---------------------"
 
             # for parent in bb1_preds:
             #     for child in bb1_succs:
             #         print find_all_paths(cfg1, parent, child)
+#    for bb1 in missing_bb_list1:
+
+    # I can think of three cases in which blocks are patched:
+    # 1. a single block is changed
+    # 2. blocks of parent-child relationship are changed
+    # 3. blocks that have no direct relationship are changed
+    # Need to take different actions for each case.
+
+    if len(missing_bb_list1) == 1: # CASE SingleBlock
+        pass
+    else: # CASE MultipleBlock
+        # make a mapping of each bb and its preds and succs
+        for bb1 in missing_bb_list1:
+            for block in bb1.pred_blocks:
+                if block in missing_bb_list1:
+                    print "block in missing bb list1:", block #
+
+
+    print "======================================================"
 
     for bb2 in bb_list2:
         if bb2.bid not in match_list_bb2:
-            print bb2.bid
+            print "bb2.bid:", bb2.bid
             for addr in sorted(bb2.addr_inst_map):
                 print addr, bb2.addr_inst_map[addr]
+            print "or,"
+            print bb2.inst_str
 
             bb2_preds = get_preds(cfg2, bb2.bid)
             bb2_succs = cfg2[bb2.bid]
             print "preds:", bb2_preds
             print "succs:", bb2_succs
 
-    # we need to look for an old-new pair
+            print "---------------------"
+
+            # for bb_pred in bb2_preds:
+            #     for bb in bb_list1:
+            #         if bb_list2[bb_pred].inst_abs_hash == bb.inst_abs_hash:
+            #             print "pred match:", bb_pred
+            #             print "in cfg1:", bb.bid, bb_list1[bb.bid].addr_inst_map
+            #             print "its succs:", cfg1[bb.bid]
+            #             for bb1 in cfg1[bb.bid]:
+            #                 print bb1, bb_list1[bb1].addr_inst_map
+
+    print cfg1
+
+    print "LIST OF VULN PTRACES:", vuln_ptrace_list
+
+    # bb_dict3 = analyze("busybox-iptime-a3004ns", "FORALLFUNC")
+    bb_dict3 = analyze("busybox-RT-AC58U", "FORALLFUNC")
+
+    for function in bb_dict3:
+        cfg3 = {}
+        for bb3 in bb_dict3[function]:
+            cfg3[bb3.bid] = bb3.succ_blocks
+        # bb_abs_hash_list = []
+        for bb3 in bb_dict3[function]:
+            for vuln_ptrace in vuln_ptrace_list:
+                # print "looking for ptrace", vuln_ptrace
+                for vuln_bb in vuln_ptrace:
+                    if bb3.inst_abs_hash == bb_list1[vuln_bb].inst_abs_hash:
+                        print "[+] found {0}:\t{1}\t{2:#x}\t{3}".format(vuln_bb, function, bb3.start_ea, vuln_ptrace)
+
+
+
+        #     bb_abs_hash_list.append(bb.inst_abs_hash)
+        # bb_abs_hash_list = list(set(bb_abs_hash_list))
+
+        # cnt = 0
+        # for hashval in vuln_ptrace_abs_hash:
+        #     if hashval in bb_abs_hash_list:
+        #         cnt += 1
+        
+        # if cnt > 1:
+
+        #     print function, cnt
+
+
+
 
 if __name__ == "__main__":
     main()
