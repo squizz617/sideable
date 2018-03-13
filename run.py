@@ -51,7 +51,7 @@ def analyze(target, function):
 
     else:
         bb_list = []
-        with open(target + ".dcm", "rb") as fp:
+        with open(os.path.join(bin_dir, "func-" + target + ".dcm"), "rb") as fp:
             while True:
                 try:
                     bb = cPickle.load(fp)
@@ -238,7 +238,7 @@ def main():
         for bb3 in bb_dict3[function]:
             for vuln_ptrace in vuln_ptrace_list:
                 # print "looking for ptrace", vuln_ptrace
-                for vuln_bb in vuln_ptrace:
+                for vuln_bb in vuln_ptrace[:-1]:
                     if bb3.inst_abs_hash == bb_list1[vuln_bb].inst_abs_hash:
                         print "[+] found {0}:\t{1}\t{2:#x}\t{3}".format(vuln_bb, function, bb3.start_ea, vuln_ptrace)
 
