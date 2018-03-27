@@ -31,7 +31,11 @@ class BasicBlock():
 
 def analyze(target, function):
     # cmd = 'idat.exe -c -A -P- -S"sideable.py ' + target + '" ' + target
-    cmd = 'idat.exe -c -A -P -S"sideable.py ' + function + '" ' + os.path.join(bin_dir, target)
+    
+    # IF YOU WANT TO DELETE OLD .idb and do a new decompilation
+    # cmd = 'idat.exe -c -A -P -S"sideable.py ' + function + '" ' + os.path.join(bin_dir, target)
+    # IF YOU WANT TO REUSE THE PAST DATABASE (FOR SPEED)
+    cmd = 'idat.exe -A -P -S"sideable.py ' + function + '" ' + os.path.join(bin_dir, target)
     print cmd
     os.system(cmd)
 
@@ -98,9 +102,15 @@ def print_abs_inst(bb):
 
 
 def main():
-    vuln_func = "make_device"
-    bb_list1 = analyze("busybox_mdev_old", vuln_func)[vuln_func]
-    bb_list2 = analyze("busybox_mdev_new", vuln_func)[vuln_func]
+    #vuln_func = "make_device"
+    #bb_list1 = analyze("busybox_mdev_old", vuln_func)[vuln_func]
+    #bb_list2 = analyze("busybox_mdev_new", vuln_func)[vuln_func]
+    #bb_list1 = analyze("busybox_1.20.2_gcc490", vuln_func)[vuln_func]
+    #bb_list2 = analyze("busybox_1.21.0_gcc490", vuln_func)[vuln_func]
+
+    vuln_func = "parse_and_execute"
+    bb_list1 = analyze("bash-4324-gcc494", vuln_func)[vuln_func]
+    bb_list2 = analyze("bash-4325-gcc494", vuln_func)[vuln_func]
 
     # vuln_func = "xmalloc_optname_optval"
     # bb_list1 = analyze("busybox_1.24.2_armeabi5", vuln_func)[vuln_func]
@@ -173,6 +183,8 @@ def main():
                     print "({})".format(succ)
                     print_inst(bb_list1[succ])
                     print ""
+                    print "string:", bb_list1[pred].inst_str + bb1.inst_str + bb_list1[succ].inst_str
+                    print "absstring:", bb_list1[pred].inst_abs_str + bb1.inst_abs_str + bb_list1[succ].inst_abs_str
 
             print "---------------------"
 
@@ -204,8 +216,8 @@ def main():
             print "bb2.bid:", bb2.bid
             for addr in sorted(bb2.addr_inst_map):
                 print addr, bb2.addr_inst_map[addr]
-            print "or,"
-            print bb2.inst_str
+            #print "or,"
+            #print bb2.inst_str
 
             bb2_preds = get_preds(cfg2, bb2.bid)
             bb2_succs = cfg2[bb2.bid]
@@ -222,27 +234,42 @@ def main():
             #             print "its succs:", cfg1[bb.bid]
             #             for bb1 in cfg1[bb.bid]:
             #                 print bb1, bb_list1[bb1].addr_inst_map
-
     print cfg1
 
     print "LIST OF VULN PTRACES:", vuln_ptrace_list
 
     # bb_dict3 = analyze("busybox-iptime-a3004ns", "FORALLFUNC")
-    bb_dict3 = analyze("busybox-RT-AC58U", "FORALLFUNC")
+    bb_dict3 = analyze("bash-439", "parse_and_execute")
 
+    mode = 2
     for function in bb_dict3:
         cfg3 = {}
         for bb3 in bb_dict3[function]:
             cfg3[bb3.bid] = bb3.succ_blocks
         # bb_abs_hash_list = []
         for bb3 in bb_dict3[function]:
-            for vuln_ptrace in vuln_ptrace_list:
-                # print "looking for ptrace", vuln_ptrace
-                for vuln_bb in vuln_ptrace[:-1]:
-                    if bb3.inst_abs_hash == bb_list1[vuln_bb].inst_abs_hash:
-                        print "[+] found {0}:\t{1}\t{2:#x}\t{3}".format(vuln_bb, function, bb3.start_ea, vuln_ptrace)
+            if mode == 1:
+                for vuln_ptrace in vuln_ptrace_list:
+                    # print "looking for ptrace", vuln_ptrace
+                    cnt = 0
 
+                    for vuln_bb in vuln_ptrace:
+                        # if Levenshtein.distance(bb_list1[vuln_bb].inst_str, bb3.inst_str) < 10:
+                        if bb3.inst_abs_hash == bb_list1[vuln_bb].inst_abs_hash:
+                            cnt += 1
+                            # print cnt, "[+] found {0}:\t{1}\t{2:#x}\t{3}".format(vuln_bb, function, bb3.start_ea, vuln_ptrace)
 
+                    if cnt == len(vuln_ptrace)-1:
+                        print "found {0}:\t{1}\t{2:#x}".format(vuln_ptrace, function, bb3.start_ea)
+                        # print Levenshtein.distance(bb_list1[vuln_bb].inst_str, bb3.inst_str)
+                        #    print Levenshtein.distance(bb_list1[vuln_bb].inst_abs_str, bb3.inst_abs_str)
+            elif mode == 2:
+                for vuln_bb in missing_bb_list1:
+                    if bb3.inst_abs_hash == vuln_bb.inst_abs_hash:
+                        print "found {0}:\t{1}\t{2:#x}".format(vuln_bb, function, bb3.start_ea)
+                    dist = Levenshtein.distance(vuln_bb.inst_str, bb3.inst_str)
+                    if dist < 30:
+                        print "{0} found {1}:\t{2}\t{3:#x}".format(dist, vuln_bb.bid, function, bb3.start_ea)
 
         #     bb_abs_hash_list.append(bb.inst_abs_hash)
         # bb_abs_hash_list = list(set(bb_abs_hash_list))
@@ -255,8 +282,6 @@ def main():
         # if cnt > 1:
 
         #     print function, cnt
-
-
 
 
 if __name__ == "__main__":
