@@ -108,9 +108,10 @@ def main():
     #bb_list1 = analyze("busybox_1.20.2_gcc490", vuln_func)[vuln_func]
     #bb_list2 = analyze("busybox_1.21.0_gcc490", vuln_func)[vuln_func]
 
-    vuln_func = "parse_and_execute"
-    bb_list1 = analyze("bash-4324-gcc494", vuln_func)[vuln_func]
-    bb_list2 = analyze("bash-4325-gcc494", vuln_func)[vuln_func]
+    vuln_func1 = "sub_4A788"
+    bb_list1 = analyze("bluetoothd1", vuln_func1)[vuln_func1]
+    vuln_func2 = "sub_4AAF0"
+    bb_list2 = analyze("bluetoothd2", vuln_func2)[vuln_func2]
 
     # vuln_func = "xmalloc_optname_optval"
     # bb_list1 = analyze("busybox_1.24.2_armeabi5", vuln_func)[vuln_func]
@@ -138,18 +139,27 @@ def main():
     for bb2 in bb_list2:
         cfg2[bb2.bid] = bb2.succ_blocks
 
+    fp_map = open("map", "w")
+    fp_map.write("\t")
+    for bb2 in bb_list2:
+        fp_map.write("{0:#x}".format(bb2.start_ea) + "\t")
+    fp_map.write("\n")
     match_cnt = 0
     match_list_bb1 = []
     match_list_bb2 = []
     for bb1 in bb_list1:
         # print bb1.addr_inst_map
         match = 0
+        fp_map.write("{0:#x}".format(bb1.start_ea) + "\t")
         for bb2 in bb_list2:
             # if bb1.inst_hash == bb2.inst_hash:
+            levdist = Levenshtein.distance(bb1.inst_abs_str, bb2.inst_abs_str)
+            fp_map.write(str(levdist) + "\t")
             if bb1.inst_abs_hash == bb2.inst_abs_hash:
                 # print "match @", bb1.bid, bb2.bid
                 match_list_bb2.append(bb2.bid)
                 match = 1
+        fp_map.write("\n")
         if match:
             match_list_bb1.append(bb1.bid)
             match_cnt += 1
@@ -169,7 +179,7 @@ def main():
             bb1.pred_blocks = get_preds(cfg1, bb1.bid)
             # print "preds:", bb1.pred_blocks
             # print "succs:", bb1.succ_blocks
-
+            """
             print "POSSIBLE VULN TRACES:"
             for pred in bb1.pred_blocks:
                 for succ in bb1.succ_blocks:
@@ -187,7 +197,7 @@ def main():
                     print "absstring:", bb_list1[pred].inst_abs_str + bb1.inst_abs_str + bb_list1[succ].inst_abs_str
 
             print "---------------------"
-
+            """
             # for parent in bb1_preds:
             #     for child in bb1_succs:
             #         print find_all_paths(cfg1, parent, child)
@@ -238,6 +248,7 @@ def main():
 
     print "LIST OF VULN PTRACES:", vuln_ptrace_list
 
+    """
     # bb_dict3 = analyze("busybox-iptime-a3004ns", "FORALLFUNC")
     bb_dict3 = analyze("bash-439", "parse_and_execute")
 
@@ -282,7 +293,7 @@ def main():
         # if cnt > 1:
 
         #     print function, cnt
-
+    """
 
 if __name__ == "__main__":
     main()
