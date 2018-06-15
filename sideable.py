@@ -151,7 +151,7 @@ if __name__ == "__main__":
                 continue
             bb_list = []
             
-            flowchart = idaapi.FlowChart(idaapi.get_func(f))
+            flowchart = idaapi.FlowChart(idaapi.get_func(f), flags=idaapi.FC_PREDS)
             for block in flowchart:
                 pred_block_list = []  # doesn't work.. always empty
                 for pred_block in block.preds():
